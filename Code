@@ -1,0 +1,239 @@
+########## Load Data #########
+rm( list = ls ( all = TRUE)) 
+test14 <- read.csv("N480C2L1R08.csv")
+X <- test14[,1:3]
+data.X <- as.matrix(X)
+
+#####  FCM ##############
+n <- nrow(data.X)
+p <- ncol(data.X)
+K = 2
+m=2 
+RandomNumber = 10000
+##Initiation Parameter##
+set.seed(RandomNumber)
+
+## Membership Matrix U (n x K)
+U <- matrix(runif(n * K,0,1),n,K)
+
+## Sum of membership on datum is 1
+U <- U / rowSums(U)
+
+## Centroid Matrix V (K x p)
+V <- matrix(0,K,p)
+
+conve <- matrix(0,1000,1)
+## Distance Matrix
+D <- matrix(0,n,K)
+
+U.old <- U + 1
+iteration = 0
+threshold=0.000001
+max.iteration=1000
+while ((max(abs(U.old - U)) > threshold) &&
+       (iteration < max.iteration))
+{
+  U.old <- U
+  D.old <-D
+  V.old<-V
+  ## Calculate Centers
+  t(U ^ m)
+  V <- t(U ^ m) %*% data.X / colSums(U ^ m)
+  for (k in 1:K)
+  {
+    
+    for (i in 1:n)
+    {
+      D[i,k] = t(data.X[i,] - V[k,]) %*%
+        (data.X[i,] -V[k,])
+    }
+  }
+  ##FUZZY PARTITION MATRIX
+  for (i in 1:n)
+  {
+    U[i,] <- 1 /
+      (((D[i,]) ^ (1 / (m - 1))) *
+         sum((1 / (D[i,])) ^ (1 /(m - 1))))
+  }
+  if(any(is.na(U))==T||any(is.infinite(U))==T)
+  {
+    U<-U.old
+    V<-V.old
+    D<-D.old
+  }
+  for (i in 1:n)
+    for (k in 1:K) {
+      if (U[i,k] < 0)
+        U[i,k] = 0
+      else if (U[i,k] > 1)
+        U[i,k] = 1
+    }
+  func.obj = 0
+  func.obj = sum(U ^ m * D)
+  conve[iteration,1] <- func.obj
+  iteration = iteration + 1
+}
+func.obj -> func.Obj.opt
+U -> U.opt
+V -> V.opt
+D -> D.opt
+###Labelling###
+colnames(U.opt) = paste("Clust",1:K,sep = " ")
+Clust.desc <- matrix(0,n,p + 1)
+rownames(Clust.desc) <- rownames(X)
+colnames(Clust.desc) <- c(colnames(X),"cluster")
+Clust.desc[,1:p] <- data.X
+for (i in 1:n)
+  Clust.desc[i,p + 1] <- which.max(U.opt[i,])
+###result input###
+result <- list()
+result$func.obj <- func.Obj.opt
+result$U <- U.opt
+result$V <- V.opt
+result$D <- D.opt
+result$m <- m
+result$call<-match.call()
+result$Clust.desc <- Clust.desc
+class(result)<-"fuzzyclust"
+print(result)
+write.csv(Clust.desc,file="FCM-Index.csv")
+write.csv(V.opt,file="FCM-V.csv")
+
+
+######################################################### ACFCM sita=10
+
+test <- read.csv("N480C2L1R08.csv")
+X <- test[,1:3]
+XP <- test[,2]
+XQ <- test[,3]
+data.X <- as.matrix(X)
+data.XP <- as.matrix(XP)
+data.XQ <- as.matrix(XQ)
+n <- nrow(data.X)
+p <- ncol(data.X)
+j <- ncol(data.XQ)
+sita <- 10
+## Number of classification
+C = 2
+m=2 
+
+## Membership Matrix U (n x C)
+
+U <- matrix(runif(n * C,0,1),n,C)
+
+## Sum of membership on datum is 1
+U <- U / rowSums(U)
+
+## Centroid Matrix V (C x p)
+V <- matrix(0,C,p)
+conve <- matrix(0,1000,1)
+## Increment Matrix DI (C x j)
+DI <- matrix(runif(C * j,0,1),C,j)
+
+## Gradient Matrix BI (C x j)
+BI <- matrix(runif(C * j,0,1),C,j)
+
+## Distance Matrix
+
+D <- matrix(0,n,C)
+U.old <- U + 1
+iteration = 0
+threshold=0.000001
+max.iteration=1000
+while ((max(abs(U.old - U)) > threshold) &&
+       (iteration < max.iteration))
+{
+  U.old <-U
+  D.old <-D
+  V.old <-V
+  DI.old<-DI
+  BI.old<-BI
+  UM <- U ^ m
+  UI <- colSums(U ^ m)
+  data.UI <- as.matrix(UI)
+  # Calculate Centers
+  V <- t(U ^ m) %*% data.X / colSums(U ^ m)
+  
+  ## Calculate increment
+  for (c in 1:C)
+  {
+    for (J in 1:j)
+    {DI[c,J] <- t(UM[,c]) %*% (data.XP[,J]-BI[c,J]*data.XQ[,J]) / data.UI[c,]
+    }
+  }
+  
+  ## Calculate Increment
+  for (c in 1:C)
+  {
+    for (J in 1:j)
+    {BI[c,J] <- t(UM[,c]) %*% (data.XP[,J]*data.XQ[,J]-DI[c,]*data.XQ[,J]) / (UM[,c]%*%(data.XQ[,J]*data.XQ[,J]))
+    }
+  }
+  
+  #Distance calculation
+  for (c in 1:C)
+  {
+    for (i in 1:n)
+    {
+      for (J in 1:j)
+      {
+        D[i,c] <- t(data.X[i,] - V[c,]) %*%
+          (data.X[i,] -V[c,]) + sita*t(data.XP[i,J] - BI[c,J]*data.XQ[i,J]-DI[c,J])%*%(data.XP[i,J] - BI[c,J]*data.XQ[i,J]-DI[c,J])
+      }
+    }
+  }
+  
+  
+  ##FUZZY PARTITION MATRIX
+  for (i in 1:n)
+  {
+    U[i,] <- 1 /
+      (((D[i,]) ^ (1 / (m - 1))) *
+         sum((1 / (D[i,])) ^ (1 /(m - 1))))
+  }
+  
+  ##ChecCing
+  if(any(is.na(U))==T||any(is.infinite(U))==T)
+  {
+    U<-U.old
+    V<-V.old
+    D<-D.old
+  }
+  for (i in 1:n)
+    for (C in 1:C) {
+      if (U[i,C] < 0)
+        U[i,C] = 0
+      else if (U[i,C] > 1)
+        U[i,C] = 1
+    }
+  func.obj = 0
+  func.obj = sum(U ^ m * D)
+  conve[iteration,1] <- func.obj
+  iteration = iteration + 1
+}
+
+func.obj -> func.Obj.opt
+U -> U.opt
+V -> V.opt
+D -> D.opt
+###Labelling###
+colnames(U.opt) = paste("Clust",1:C,sep = " ")
+Clust.desc <- matrix(0,n,p + 1)
+rownames(Clust.desc) <- rownames(X)
+colnames(Clust.desc) <- c(colnames(X),"cluster")
+Clust.desc[,1:p] <- data.X
+for (i in 1:n)
+  Clust.desc[i,p + 1] <- which.max(U.opt[i,])
+###result input###
+result <- list()
+result$func.obj <- func.Obj.opt
+result$U <- U.opt
+result$V <- V.opt
+result$D <- D.opt
+result$m <- m
+result$call<-match.call()
+result$Clust.desc <- Clust.desc
+class(result)<-"fuzzyclust"
+print(result)
+write.csv(Clust.desc,file="ACFCM-Index.csv")
+write.csv(V.opt,file="ACFCM-V.csv")
